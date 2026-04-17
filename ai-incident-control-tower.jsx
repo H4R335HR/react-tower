@@ -316,17 +316,20 @@ function Node({ item, labelSide, circleRef }) {
           width: 64, height: 64, borderRadius: "50%",
           border: `2.5px solid ${col.ring}`, background: col.bg,
           display: "flex", alignItems: "center", justifyContent: "center",
-          boxShadow: hovered ? `0 0 0 4px ${col.ring}18` : "none",
-          transition: "box-shadow 0.25s ease",
+          boxShadow: hovered
+            ? `0 0 0 5px ${col.ring}15, inset 0 0 12px ${col.ring}08, 0 6px 20px ${col.ring}20`
+            : `inset 0 0 8px ${col.ring}05`,
+          transition: "box-shadow 0.3s ease",
         }}>
           <div style={{ width: 32, height: 32 }}>{ICONS[item.icon] || ICONS.globe}</div>
         </div>
         <div style={{
           position: "absolute", bottom: -5, left: "50%", transform: "translateX(-50%)",
-          background: col.badge, color: "#fff", fontSize: 11, fontWeight: 700,
+          background: `linear-gradient(135deg, ${col.badge}, ${col.badge}dd)`,
+          color: "#fff", fontSize: 11, fontWeight: 700,
           fontFamily: "'Segoe UI', system-ui, sans-serif",
           borderRadius: 10, padding: "1px 8px", minWidth: 26, textAlign: "center",
-          boxShadow: hovered ? `0 2px 8px ${col.badge}55` : "none",
+          boxShadow: hovered ? `0 3px 10px ${col.badge}55` : `0 1px 4px ${col.badge}30`,
           transition: "box-shadow 0.25s ease",
         }}>
           {String(item.count).padStart(2, "0")}
@@ -399,15 +402,24 @@ function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domai
     return () => { clearTimeout(t); window.removeEventListener("resize", calc); };
   }, [sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domains, sources, targets]);
 
-  /* Style per type: domains are more visible, sources & targets are lighter */
   const lineStyle = {
-    source: { stroke: "#c0c6da", strokeWidth: 1, strokeOpacity: 0.3 },
-    domain: { stroke: "#a8b0cc", strokeWidth: 1.4, strokeOpacity: 0.5 },
-    target: { stroke: "#c0c6da", strokeWidth: 1, strokeOpacity: 0.3 },
+    source: { stroke: "url(#wireGrad)", strokeWidth: 1.2, strokeOpacity: 0.35 },
+    domain: { stroke: "url(#wireGradStrong)", strokeWidth: 1.6, strokeOpacity: 0.55 },
+    target: { stroke: "url(#wireGrad)", strokeWidth: 1.2, strokeOpacity: 0.35 },
   };
 
   return (
     <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: 0 }}>
+      <defs>
+        <linearGradient id="wireGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#b8bdd8" />
+          <stop offset="100%" stopColor="#d0d4e8" />
+        </linearGradient>
+        <linearGradient id="wireGradStrong" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#9ba3c8" />
+          <stop offset="100%" stopColor="#bcc2dc" />
+        </linearGradient>
+      </defs>
       {curves.map(l => (
         <path key={l.id} d={l.d}
           stroke={lineStyle[l.type].stroke}
@@ -424,17 +436,24 @@ function Hub({ hubRef }) {
   return (
     <div ref={hubRef} style={{
       width: 150, height: 150, borderRadius: "50%", flexShrink: 0,
-      background: "radial-gradient(circle at 45% 40%, #d4d8f5 0%, #dfe2f8 40%, #e8eafb 100%)",
-      border: "1.5px solid rgba(170,180,220,0.35)",
+      background: "radial-gradient(circle at 40% 35%, #cdd2f2 0%, #d8dcf6 35%, #e4e7fa 70%, #eceef9 100%)",
+      border: "1.5px solid rgba(170,180,220,0.3)",
       display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column",
-      boxShadow: "0 0 60px rgba(130,140,210,0.15), 0 0 120px rgba(160,170,230,0.08), 0 4px 20px rgba(150,160,210,0.12)",
+      boxShadow: `
+        0 0 0 8px rgba(180,185,230,0.12),
+        0 0 0 20px rgba(180,185,230,0.06),
+        0 0 60px rgba(130,140,210,0.18),
+        0 0 120px rgba(160,170,230,0.08),
+        0 8px 32px rgba(100,110,180,0.12)
+      `,
       zIndex: 2,
-      transition: "box-shadow 0.4s ease",
+      animation: "hubPulse 4s ease-in-out infinite",
     }}>
       <div style={{
-        fontFamily: "'Segoe UI', system-ui, sans-serif", fontSize: 14, fontWeight: 700,
-        color: "#5b5fa6", textAlign: "center", lineHeight: 1.3,
-        letterSpacing: "0.02em",
+        fontFamily: "'Segoe UI', system-ui, sans-serif", fontSize: 15, fontWeight: 800,
+        background: "linear-gradient(135deg, #4a4e94, #6b6fc0)",
+        WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+        textAlign: "center", lineHeight: 1.3, letterSpacing: "0.03em",
       }}>AI IT Ops<br/>Tower</div>
     </div>
   );
@@ -473,41 +492,33 @@ export default function AIIncidentControlTower() {
     setModal({ open: false, section: sec });
   };
 
-  const leftDomains = domains.slice(0, Math.ceil(domains.length / 2));
+
+  /* ── Vertical-with-bow positioning for all groups ── */
+  const SPREAD_H  = 520;
+  const OUTER_X   = 400;   /* sources & targets distance from hub */
+  const INNER_X   = 180;   /* domains distance from hub */
+  const BOW       = 70;    /* parabolic horizontal bow */
+
+  const leftDomains  = domains.slice(0, Math.ceil(domains.length / 2));
   const rightDomains = domains.slice(Math.ceil(domains.length / 2));
 
-  /* ── Hybrid positioning: vertical-with-bow + gentle arc ── */
-  const SPREAD_H = 520;  /* total vertical spread for outer columns */
-  const BASE_X   = 400;  /* horizontal distance from hub center */
-  const BOW      = 70;   /* max horizontal bow at the middle node */
-  const INNER_R  = 235;  /* radius for domain arcs */
-  const LAYOUT_H = Math.max(SPREAD_H + 160, 680);
+  const maxNodes = Math.max(sources.length, leftDomains.length, rightDomains.length, targets.length);
+  const LAYOUT_H = Math.max(maxNodes * 100 + 60, 680);
 
-  /**
-   * Vertical equidistant with a parabolic horizontal bow.
-   * side: -1 = left (sources), +1 = right (targets)
-   */
-  const bowPositions = (n, side) =>
+  /* Vertical equidistant + parabolic bow. side: -1 = left, +1 = right */
+  const bowPositions = (n, baseX, side) =>
     Array.from({ length: n }, (_, i) => {
-      const t = n <= 1 ? 0.5 : i / (n - 1);           /* 0 → 1 */
-      const y = (t - 0.5) * SPREAD_H;                  /* centred vertically */
-      const curve = BOW * (1 - Math.pow(2 * t - 1, 2)); /* 0 at ends, BOW at middle */
-      const x = side * (BASE_X + curve);                /* bow pushes outward */
+      const t = n <= 1 ? 0.5 : i / (n - 1);
+      const y = (t - 0.5) * (LAYOUT_H - 120);
+      const curve = BOW * (1 - Math.pow(2 * t - 1, 2));
+      const x = side * (baseX + curve);
       return { x, y };
     });
 
-  /* Gentle radial arc for domains (tight sweep keeps it subtle) */
-  const arc = (n, startDeg, sweepDeg, r) =>
-    Array.from({ length: n }, (_, i) => {
-      const deg = n <= 1 ? startDeg + sweepDeg / 2 : startDeg + sweepDeg * i / (n - 1);
-      const rad = deg * Math.PI / 180;
-      return { x: Math.cos(rad) * r, y: Math.sin(rad) * r };
-    });
-
-  const srcPos  = bowPositions(sources.length, -1);
-  const tgtPos  = bowPositions(targets.length,  1);
-  const lDomPos = arc(leftDomains.length,  215, -70, INNER_R);
-  const rDomPos = arc(rightDomains.length, 325,  70, INNER_R);
+  const srcPos  = bowPositions(sources.length,      OUTER_X, -1);
+  const lDomPos = bowPositions(leftDomains.length,  INNER_X, -1);
+  const rDomPos = bowPositions(rightDomains.length, INNER_X,  1);
+  const tgtPos  = bowPositions(targets.length,      OUTER_X,  1);
 
   const absNode = (pos) => ({
     position: "absolute",
@@ -533,27 +544,37 @@ export default function AIIncidentControlTower() {
         onClose={() => setModal(m => ({ ...m, open: false }))}
         onSave={handleAddNode} />
 
+      {/* Keyframes for hub pulse */}
+      <style>{`
+        @keyframes hubPulse {
+          0%, 100% { box-shadow: 0 0 0 8px rgba(180,185,230,0.12), 0 0 0 20px rgba(180,185,230,0.06), 0 0 60px rgba(130,140,210,0.18), 0 0 120px rgba(160,170,230,0.08), 0 8px 32px rgba(100,110,180,0.12); }
+          50% { box-shadow: 0 0 0 10px rgba(180,185,230,0.18), 0 0 0 24px rgba(180,185,230,0.09), 0 0 80px rgba(130,140,210,0.22), 0 0 140px rgba(160,170,230,0.1), 0 8px 40px rgba(100,110,180,0.15); }
+        }
+      `}</style>
+
       {/* Title */}
       <h1 style={{
-        fontSize: 22, fontWeight: 700, color: "#3b2d7a",
-        margin: "0 0 28px 20px", letterSpacing: "0.01em",
+        fontSize: 24, fontWeight: 800, margin: "0 0 28px 20px", letterSpacing: "0.02em",
+        background: "linear-gradient(135deg, #3b2d7a 0%, #5b5fa6 50%, #7b6fc0 100%)",
+        WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
       }}>
         AI Incident Control Tower
       </h1>
 
       {/* Section headers row */}
       <div style={{
-        display: "flex", maxWidth: 1200, margin: "0 auto 14px", padding: "0 10px",
+        display: "flex", maxWidth: 1200, margin: "0 auto 18px", padding: "0 10px",
       }}>
-        <div style={{ flex: "0 0 220px", textAlign: "center" }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "#2d2f4e" }}>Incident Sources</span>
-        </div>
-        <div style={{ flex: 1, textAlign: "center" }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "#2d2f4e" }}>Incident Domains</span>
-        </div>
-        <div style={{ flex: "0 0 220px", textAlign: "center" }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: "#2d2f4e" }}>Escalation Targets</span>
-        </div>
+        {["Incident Sources", "Incident Domains", "Escalation Targets"].map((title, idx) => (
+          <div key={title} style={{ flex: idx === 1 ? 1 : "0 0 220px", textAlign: "center" }}>
+            <span style={{
+              fontSize: 14, fontWeight: 700, color: "#4a4c78", letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              borderBottom: "2px solid rgba(91,95,166,0.2)",
+              paddingBottom: 4,
+            }}>{title}</span>
+          </div>
+        ))}
       </div>
 
       {/* Main radial layout */}
@@ -600,33 +621,39 @@ export default function AIIncidentControlTower() {
         ))}
 
         {/* Add buttons — positioned below each section's arc */}
-        <div style={{ position: "absolute", left: `calc(50% - ${BASE_X}px)`, bottom: 8, transform: "translateX(-50%)" }}>
+        <div style={{ position: "absolute", left: `calc(50% - ${OUTER_X}px)`, bottom: 8, transform: "translateX(-50%)" }}>
           <AddButton onClick={() => setModal({ open: true, section: "sources" })} />
         </div>
         <div style={{ position: "absolute", left: "50%", bottom: 8, transform: "translateX(-50%)" }}>
           <AddButton onClick={() => setModal({ open: true, section: "domains" })} />
         </div>
-        <div style={{ position: "absolute", left: `calc(50% + ${BASE_X}px)`, bottom: 8, transform: "translateX(-50%)" }}>
+        <div style={{ position: "absolute", left: `calc(50% + ${OUTER_X}px)`, bottom: 8, transform: "translateX(-50%)" }}>
           <AddButton onClick={() => setModal({ open: true, section: "targets" })} />
         </div>
       </div>
 
       {/* Legend */}
       <div style={{
-        display: "flex", gap: 32, marginTop: 24, padding: "0 20px", flexWrap: "wrap",
+        display: "flex", gap: 28, marginTop: 28, padding: "14px 24px", flexWrap: "wrap",
+        maxWidth: 700, margin: "28px auto 0",
+        background: "rgba(255,255,255,0.45)", backdropFilter: "blur(12px)",
+        borderRadius: 14, border: "1px solid rgba(180,185,220,0.2)",
+        boxShadow: "0 2px 16px rgba(120,130,180,0.08)",
+        justifyContent: "center",
       }}>
         {[
-          { label: "High Impact: >10 Incidents", color: "#d4556a" },
-          { label: "Medium Impact: 5 - 10 Incidents", color: "#e8a84c" },
-          { label: "Low Impact: < 5 Incidents", color: "#94a3c4" },
+          { label: "High Impact: >10", color: "#d4556a" },
+          { label: "Medium Impact: 5–10", color: "#e8a84c" },
+          { label: "Low Impact: <5", color: "#94a3c4" },
         ].map(l => (
           <div key={l.label} style={{
             display: "flex", alignItems: "center", gap: 8,
-            fontSize: 13, color: "#4a4c6a",
+            fontSize: 12, fontWeight: 600, color: "#4a4c6a", letterSpacing: "0.02em",
           }}>
             <div style={{
-              width: 12, height: 12, borderRadius: "50%",
-              border: `2px solid ${l.color}`, background: "transparent",
+              width: 10, height: 10, borderRadius: "50%",
+              background: `radial-gradient(circle, ${l.color}40 30%, transparent 70%)`,
+              border: `2px solid ${l.color}`,
             }} />
             {l.label}
           </div>
