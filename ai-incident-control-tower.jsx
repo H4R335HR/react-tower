@@ -347,20 +347,6 @@ function Node({ item, labelSide, circleRef }) {
   );
 }
 
-/* ─── Evenly-spaced vertical column ─── */
-function Column({ items, labelSide, style, onRef }) {
-  return (
-    <div style={{
-      display: "flex", flexDirection: "column", justifyContent: "space-evenly",
-      height: "100%", ...style,
-    }}>
-      {items.map(item => (
-        <RefNode key={item.id} item={item} labelSide={labelSide} onMount={onRef} />
-      ))}
-    </div>
-  );
-}
-
 /* ─── Node wrapper that captures a DOM ref on the circle element ─── */
 function RefNode({ item, labelSide, onMount }) {
   const circleRef = useRef(null);
@@ -438,7 +424,7 @@ function Hub({ hubRef }) {
   return (
     <div ref={hubRef} style={{
       width: 150, height: 150, borderRadius: "50%", flexShrink: 0,
-      background: "radial-gradient(circle at 45% 40%, rgba(210,215,245,0.7) 0%, rgba(220,225,248,0.4) 40%, rgba(235,238,250,0.15) 100%)",
+      background: "radial-gradient(circle at 45% 40%, #d4d8f5 0%, #dfe2f8 40%, #e8eafb 100%)",
       border: "1.5px solid rgba(170,180,220,0.35)",
       display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column",
       boxShadow: "0 0 60px rgba(130,140,210,0.15), 0 0 120px rgba(160,170,230,0.08), 0 4px 20px rgba(150,160,210,0.12)",
@@ -489,8 +475,47 @@ export default function AIIncidentControlTower() {
 
   const leftDomains = domains.slice(0, Math.ceil(domains.length / 2));
   const rightDomains = domains.slice(Math.ceil(domains.length / 2));
-  const maxNodes = Math.max(sources.length, Math.max(leftDomains.length, rightDomains.length), targets.length);
-  const containerHeight = Math.max(maxNodes * 100 + 40, 440);
+
+  /* ── Hybrid positioning: vertical-with-bow + gentle arc ── */
+  const SPREAD_H = 520;  /* total vertical spread for outer columns */
+  const BASE_X   = 400;  /* horizontal distance from hub center */
+  const BOW      = 70;   /* max horizontal bow at the middle node */
+  const INNER_R  = 235;  /* radius for domain arcs */
+  const LAYOUT_H = Math.max(SPREAD_H + 160, 680);
+
+  /**
+   * Vertical equidistant with a parabolic horizontal bow.
+   * side: -1 = left (sources), +1 = right (targets)
+   */
+  const bowPositions = (n, side) =>
+    Array.from({ length: n }, (_, i) => {
+      const t = n <= 1 ? 0.5 : i / (n - 1);           /* 0 → 1 */
+      const y = (t - 0.5) * SPREAD_H;                  /* centred vertically */
+      const curve = BOW * (1 - Math.pow(2 * t - 1, 2)); /* 0 at ends, BOW at middle */
+      const x = side * (BASE_X + curve);                /* bow pushes outward */
+      return { x, y };
+    });
+
+  /* Gentle radial arc for domains (tight sweep keeps it subtle) */
+  const arc = (n, startDeg, sweepDeg, r) =>
+    Array.from({ length: n }, (_, i) => {
+      const deg = n <= 1 ? startDeg + sweepDeg / 2 : startDeg + sweepDeg * i / (n - 1);
+      const rad = deg * Math.PI / 180;
+      return { x: Math.cos(rad) * r, y: Math.sin(rad) * r };
+    });
+
+  const srcPos  = bowPositions(sources.length, -1);
+  const tgtPos  = bowPositions(targets.length,  1);
+  const lDomPos = arc(leftDomains.length,  215, -70, INNER_R);
+  const rDomPos = arc(rightDomains.length, 325,  70, INNER_R);
+
+  const absNode = (pos) => ({
+    position: "absolute",
+    left: `calc(50% + ${pos.x}px)`,
+    top: `calc(50% + ${pos.y}px)`,
+    transform: "translate(-50%, -50%)",
+    whiteSpace: "nowrap",
+  });
 
   return (
     <div style={{
@@ -531,11 +556,9 @@ export default function AIIncidentControlTower() {
         </div>
       </div>
 
-      {/* Main layout */}
+      {/* Main radial layout */}
       <div ref={containerRef} style={{
-        position: "relative", display: "flex", alignItems: "stretch",
-        maxWidth: 1200, margin: "0 auto",
-        height: containerHeight,
+        position: "relative", maxWidth: 1200, margin: "0 auto", height: LAYOUT_H,
       }}>
         {ready && (
           <Lines sourceRefs={sourceRefs} domainRefs={domainRefs} targetRefs={targetRefs}
@@ -543,63 +566,47 @@ export default function AIIncidentControlTower() {
             domains={domains} sources={sources} targets={targets} />
         )}
 
-        {/* LEFT — Incident Sources */}
-        <div style={{ flex: "0 0 220px", display: "flex", flexDirection: "column", padding: "12px 0" }}>
-          <div style={{
-            display: "flex", flexDirection: "column", justifyContent: "space-evenly",
-            flex: 1, alignItems: "flex-end",
-          }}>
-            {sources.map(item => (
-              <RefNode key={item.id} item={item} labelSide="left" onMount={registerSource} />
-            ))}
+        {/* Hub — dead centre */}
+        <div style={{ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", zIndex: 2 }}>
+          <Hub hubRef={hubRef} />
+        </div>
+
+        {/* Sources — left arc */}
+        {sources.map((item, i) => (
+          <div key={item.id} style={absNode(srcPos[i])}>
+            <RefNode item={item} labelSide="left" onMount={registerSource} />
           </div>
+        ))}
+
+        {/* Left domains — inner left arc */}
+        {leftDomains.map((item, i) => (
+          <div key={item.id} style={absNode(lDomPos[i])}>
+            <RefNode item={item} labelSide="left" onMount={registerDomain} />
+          </div>
+        ))}
+
+        {/* Right domains — inner right arc */}
+        {rightDomains.map((item, i) => (
+          <div key={item.id} style={absNode(rDomPos[i])}>
+            <RefNode item={item} labelSide="right" onMount={registerDomain} />
+          </div>
+        ))}
+
+        {/* Targets — right arc */}
+        {targets.map((item, i) => (
+          <div key={item.id} style={absNode(tgtPos[i])}>
+            <RefNode item={item} labelSide="right" onMount={registerTarget} />
+          </div>
+        ))}
+
+        {/* Add buttons — positioned below each section's arc */}
+        <div style={{ position: "absolute", left: `calc(50% - ${BASE_X}px)`, bottom: 8, transform: "translateX(-50%)" }}>
           <AddButton onClick={() => setModal({ open: true, section: "sources" })} />
         </div>
-
-        {/* CENTER — Domains flanking Hub */}
-        <div style={{
-          flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-          position: "relative", minWidth: 480, padding: "12px 0",
-        }}>
-          {/* Left half of domains */}
-          <div style={{
-            display: "flex", flexDirection: "column", justifyContent: "space-evenly",
-            height: "100%", alignItems: "flex-end", flex: "0 0 170px",
-          }}>
-            {leftDomains.map(d => (
-              <RefNode key={d.id} item={d} labelSide="left" onMount={registerDomain} />
-            ))}
-          </div>
-
-          {/* Hub + domain add button */}
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", zIndex: 2 }}>
-            <div style={{ margin: "0 24px" }}>
-              <Hub hubRef={hubRef} />
-            </div>
-            <AddButton onClick={() => setModal({ open: true, section: "domains" })} />
-          </div>
-
-          {/* Right half of domains */}
-          <div style={{
-            display: "flex", flexDirection: "column", justifyContent: "space-evenly",
-            height: "100%", alignItems: "flex-start", flex: "0 0 170px",
-          }}>
-            {rightDomains.map(d => (
-              <RefNode key={d.id} item={d} labelSide="right" onMount={registerDomain} />
-            ))}
-          </div>
+        <div style={{ position: "absolute", left: "50%", bottom: 8, transform: "translateX(-50%)" }}>
+          <AddButton onClick={() => setModal({ open: true, section: "domains" })} />
         </div>
-
-        {/* RIGHT — Escalation Targets */}
-        <div style={{ flex: "0 0 220px", display: "flex", flexDirection: "column", padding: "12px 0" }}>
-          <div style={{
-            display: "flex", flexDirection: "column", justifyContent: "space-evenly",
-            flex: 1, alignItems: "flex-start",
-          }}>
-            {targets.map(item => (
-              <RefNode key={item.id} item={item} labelSide="right" onMount={registerTarget} />
-            ))}
-          </div>
+        <div style={{ position: "absolute", left: `calc(50% + ${BASE_X}px)`, bottom: 8, transform: "translateX(-50%)" }}>
           <AddButton onClick={() => setModal({ open: true, section: "targets" })} />
         </div>
       </div>
