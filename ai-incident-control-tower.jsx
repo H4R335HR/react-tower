@@ -158,6 +158,111 @@ const ICONS = {
   ),
 };
 
+const ICON_NAMES = Object.keys(ICONS);
+
+/* ─── Add-node modal ─── */
+function NodeModal({ open, section, onClose, onSave }) {
+  const [label, setLabel] = useState("");
+  const [count, setCount] = useState(0);
+  const [icon, setIcon] = useState(ICON_NAMES[0]);
+  if (!open) return null;
+
+  const sectionTitle = { sources: "Incident Source", domains: "Incident Domain", targets: "Escalation Target" }[section];
+
+  const overlay = {
+    position: "fixed", inset: 0, zIndex: 1000,
+    background: "rgba(30,30,60,0.45)", backdropFilter: "blur(6px)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+  };
+  const card = {
+    background: "#fff", borderRadius: 18, padding: "32px 36px", width: 380,
+    boxShadow: "0 20px 60px rgba(60,50,120,0.25)", fontFamily: "'Segoe UI', system-ui, sans-serif",
+  };
+  const inputStyle = {
+    width: "100%", padding: "10px 14px", borderRadius: 10,
+    border: "1.5px solid #c8cce0", fontSize: 14, outline: "none",
+    fontFamily: "inherit", boxSizing: "border-box",
+    transition: "border-color 0.2s",
+  };
+  const labelStyle = { fontSize: 12, fontWeight: 700, color: "#5b5fa6", marginBottom: 6, display: "block" };
+
+  return (
+    <div style={overlay} onClick={onClose}>
+      <div style={card} onClick={e => e.stopPropagation()}>
+        <h3 style={{ margin: "0 0 20px", fontSize: 18, color: "#3b2d7a" }}>
+          Add {sectionTitle}
+        </h3>
+
+        <label style={labelStyle}>Label</label>
+        <input style={inputStyle} placeholder="e.g. Passenger Apps"
+          value={label} onChange={e => setLabel(e.target.value)}
+          onFocus={e => e.target.style.borderColor = "#5b5fa6"}
+          onBlur={e => e.target.style.borderColor = "#c8cce0"} />
+
+        <div style={{ height: 16 }} />
+        <label style={labelStyle}>Incident Count</label>
+        <input style={inputStyle} type="number" min="0" placeholder="0"
+          value={count} onChange={e => setCount(Math.max(0, +e.target.value))}
+          onFocus={e => e.target.style.borderColor = "#5b5fa6"}
+          onBlur={e => e.target.style.borderColor = "#c8cce0"} />
+
+        <div style={{ height: 16 }} />
+        <label style={labelStyle}>Icon</label>
+        <div style={{
+          display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 8,
+          maxHeight: 160, overflowY: "auto", padding: 4,
+        }}>
+          {ICON_NAMES.map(name => (
+            <div key={name} onClick={() => setIcon(name)} style={{
+              width: 44, height: 44, borderRadius: 10,
+              border: icon === name ? "2.5px solid #5b5fa6" : "1.5px solid #ddd",
+              background: icon === name ? "rgba(91,95,166,0.1)" : "#f8f8fc",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", transition: "all 0.15s",
+            }}>
+              <div style={{ width: 24, height: 24 }}>{ICONS[name]}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: 12, marginTop: 24, justifyContent: "flex-end" }}>
+          <button onClick={onClose} style={{
+            padding: "9px 22px", borderRadius: 10, border: "1.5px solid #c8cce0",
+            background: "#fff", color: "#5b5fa6", fontSize: 14, fontWeight: 600,
+            cursor: "pointer", fontFamily: "inherit",
+          }}>Cancel</button>
+          <button onClick={() => {
+            if (!label.trim()) return;
+            onSave({ label: label.trim(), count, icon });
+            setLabel(""); setCount(0); setIcon(ICON_NAMES[0]);
+          }} style={{
+            padding: "9px 22px", borderRadius: 10, border: "none",
+            background: "linear-gradient(135deg, #5b5fa6, #7b6fc0)",
+            color: "#fff", fontSize: 14, fontWeight: 600,
+            cursor: "pointer", fontFamily: "inherit",
+            boxShadow: "0 4px 14px rgba(91,95,166,0.35)",
+          }}>Add Node</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Stylish "+" button ─── */
+function AddButton({ onClick }) {
+  return (
+    <div onClick={onClick} style={{
+      width: 40, height: 40, borderRadius: "50%", cursor: "pointer",
+      border: "2px dashed #a8b0cc", display: "flex", alignItems: "center",
+      justifyContent: "center", margin: "8px auto 0", transition: "all 0.2s",
+      background: "rgba(168,176,204,0.08)", color: "#7b8bb5", fontSize: 22, fontWeight: 300,
+    }}
+    onMouseEnter={e => { e.currentTarget.style.borderColor = "#5b5fa6"; e.currentTarget.style.color = "#5b5fa6"; e.currentTarget.style.background = "rgba(91,95,166,0.1)"; }}
+    onMouseLeave={e => { e.currentTarget.style.borderColor = "#a8b0cc"; e.currentTarget.style.color = "#7b8bb5"; e.currentTarget.style.background = "rgba(168,176,204,0.08)"; }}
+    >+</div>
+  );
+}
+
 /* ─── DATA ─── */
 const INIT_SOURCES = [
   { id: "s1", label: "Passenger\nDigital Apps", count: 12, icon: "smartphone" },
@@ -249,7 +354,7 @@ function RefNode({ item, labelSide, onMount }) {
 const NODE_RADIUS = 32;  /* half of the 64px node circle */
 const HUB_RADIUS  = 75;  /* half of the 150px hub circle */
 
-function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domains }) {
+function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domains, sources, targets }) {
   const [curves, setCurves] = useState([]);
   useEffect(() => {
     const calc = () => {
@@ -314,10 +419,11 @@ function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domai
 
       setCurves(result);
     };
-    calc();
+    /* Small delay to let new DOM nodes mount before measuring */
+    const t = setTimeout(calc, 50);
     window.addEventListener("resize", calc);
-    return () => window.removeEventListener("resize", calc);
-  }, [sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domains]);
+    return () => { clearTimeout(t); window.removeEventListener("resize", calc); };
+  }, [sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domains, sources, targets]);
 
   /* Style per type: domains are more visible, sources & targets are lighter */
   const lineStyle = {
@@ -360,9 +466,10 @@ function Hub({ hubRef }) {
 
 /* ─── MAIN COMPONENT ─── */
 export default function AIIncidentControlTower() {
-  const [sources] = useState(INIT_SOURCES);
-  const [domains] = useState(INIT_DOMAINS);
-  const [targets] = useState(INIT_TARGETS);
+  const [sources, setSources] = useState(INIT_SOURCES);
+  const [domains, setDomains] = useState(INIT_DOMAINS);
+  const [targets, setTargets] = useState(INIT_TARGETS);
+  const [modal, setModal] = useState({ open: false, section: "sources" });
 
   const containerRef = useRef(null);
   const hubRef = useRef(null);
@@ -380,10 +487,20 @@ export default function AIIncidentControlTower() {
     return () => clearTimeout(t);
   }, []);
 
+  const nextId = (prefix, list) => `${prefix}${list.length + 1}_${Date.now()}`;
+
+  const handleAddNode = ({ label, count, icon }) => {
+    const sec = modal.section;
+    if (sec === "sources") setSources(p => [...p, { id: nextId("s", p), label, count, icon }]);
+    if (sec === "domains") setDomains(p => [...p, { id: nextId("d", p), label, count, icon }]);
+    if (sec === "targets") setTargets(p => [...p, { id: nextId("e", p), label, count, icon }]);
+    setModal({ open: false, section: sec });
+  };
+
   const leftDomains = domains.slice(0, Math.ceil(domains.length / 2));
   const rightDomains = domains.slice(Math.ceil(domains.length / 2));
   const maxNodes = Math.max(sources.length, Math.max(leftDomains.length, rightDomains.length), targets.length);
-  const containerHeight = maxNodes * 100 + 40;
+  const containerHeight = Math.max(maxNodes * 100 + 40, 440);
 
   return (
     <div style={{
@@ -392,6 +509,10 @@ export default function AIIncidentControlTower() {
       fontFamily: "'Segoe UI', system-ui, sans-serif",
       padding: "28px 24px",
     }}>
+      <NodeModal open={modal.open} section={modal.section}
+        onClose={() => setModal(m => ({ ...m, open: false }))}
+        onSave={handleAddNode} />
+
       {/* Title */}
       <h1 style={{
         fontSize: 22, fontWeight: 700, color: "#3b2d7a",
@@ -423,12 +544,22 @@ export default function AIIncidentControlTower() {
       }}>
         {ready && (
           <Lines sourceRefs={sourceRefs} domainRefs={domainRefs} targetRefs={targetRefs}
-            hubRef={hubRef} containerRef={containerRef} domains={domains} />
+            hubRef={hubRef} containerRef={containerRef}
+            domains={domains} sources={sources} targets={targets} />
         )}
 
-        {/* LEFT — Incident Sources (label left, icon right) */}
-        <Column items={sources} labelSide="left" onRef={registerSource}
-          style={{ flex: "0 0 220px", alignItems: "flex-end", padding: "12px 0" }} />
+        {/* LEFT — Incident Sources */}
+        <div style={{ flex: "0 0 220px", display: "flex", flexDirection: "column", padding: "12px 0" }}>
+          <div style={{
+            display: "flex", flexDirection: "column", justifyContent: "space-evenly",
+            flex: 1, alignItems: "flex-end",
+          }}>
+            {sources.map(item => (
+              <RefNode key={item.id} item={item} labelSide="left" onMount={registerSource} />
+            ))}
+          </div>
+          <AddButton onClick={() => setModal({ open: true, section: "sources" })} />
+        </div>
 
         {/* CENTER — Domains flanking Hub */}
         <div style={{
@@ -445,9 +576,12 @@ export default function AIIncidentControlTower() {
             ))}
           </div>
 
-          {/* Hub */}
-          <div style={{ margin: "0 24px", zIndex: 2 }}>
-            <Hub hubRef={hubRef} />
+          {/* Hub + domain add button */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", zIndex: 2 }}>
+            <div style={{ margin: "0 24px" }}>
+              <Hub hubRef={hubRef} />
+            </div>
+            <AddButton onClick={() => setModal({ open: true, section: "domains" })} />
           </div>
 
           {/* Right half of domains */}
@@ -461,9 +595,18 @@ export default function AIIncidentControlTower() {
           </div>
         </div>
 
-        {/* RIGHT — Escalation Targets (icon left, label right) */}
-        <Column items={targets} labelSide="right" onRef={registerTarget}
-          style={{ flex: "0 0 220px", alignItems: "flex-start", padding: "12px 0" }} />
+        {/* RIGHT — Escalation Targets */}
+        <div style={{ flex: "0 0 220px", display: "flex", flexDirection: "column", padding: "12px 0" }}>
+          <div style={{
+            display: "flex", flexDirection: "column", justifyContent: "space-evenly",
+            flex: 1, alignItems: "flex-start",
+          }}>
+            {targets.map(item => (
+              <RefNode key={item.id} item={item} labelSide="right" onMount={registerTarget} />
+            ))}
+          </div>
+          <AddButton onClick={() => setModal({ open: true, section: "targets" })} />
+        </div>
       </div>
 
       {/* Legend */}
