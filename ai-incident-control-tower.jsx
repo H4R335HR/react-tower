@@ -2,9 +2,9 @@ import { useState, useRef, useEffect, useCallback } from "react";
 
 /* ─── colour constants ─── */
 const IMPACT = {
-  high:   { ring: "#d4556a", bg: "rgba(212,85,106,0.08)", badge: "#d4556a" },
-  medium: { ring: "#e8a84c", bg: "rgba(232,168,76,0.08)",  badge: "#e8a84c" },
-  low:    { ring: "#94a3c4", bg: "rgba(148,163,196,0.08)", badge: "#7b8bb5" },
+  high:   { ring: "#d4556a", bg: "#faf0f2", badge: "#d4556a" },
+  medium: { ring: "#e8a84c", bg: "#fdf6ee", badge: "#e8a84c" },
+  low:    { ring: "#94a3c4", bg: "#f3f4f8", badge: "#7b8bb5" },
 };
 function getImpact(c) { return c > 10 ? "high" : c >= 5 ? "medium" : "low"; }
 
@@ -300,7 +300,7 @@ function Node({ item, labelSide, circleRef }) {
       display: "flex", alignItems: "center", gap: 10,
       flexDirection: labelSide === "right" ? "row" : "row-reverse",
     }}>
-      <div ref={circleRef} style={{ position: "relative", width: 64, height: 64, flexShrink: 0 }}>
+      <div ref={circleRef} style={{ position: "relative", width: 64, height: 64, flexShrink: 0, zIndex: 1 }}>
         <div style={{
           width: 64, height: 64, borderRadius: "50%",
           border: `2.5px solid ${col.ring}`, background: col.bg,
@@ -351,9 +351,6 @@ function RefNode({ item, labelSide, onMount }) {
 }
 
 /* ─── Connector curves (all three sections → hub) ─── */
-const NODE_RADIUS = 32;  /* half of the 64px node circle */
-const HUB_RADIUS  = 75;  /* half of the 150px hub circle */
-
 function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domains, sources, targets }) {
   const [curves, setCurves] = useState([]);
   useEffect(() => {
@@ -367,59 +364,32 @@ function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domai
       const hy = hr.top + hr.height / 2 - cr.top;
       const result = [];
 
-      /**
-       * Offset a point (cx, cy) along the direction towards (tx, ty)
-       * so the returned point sits on the perimeter of a circle of
-       * the given radius centred at (cx, cy).
-       */
-      const perimeterPoint = (cx, cy, tx, ty, radius) => {
-        const dx = tx - cx;
-        const dy = ty - cy;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist === 0) return { x: cx, y: cy };
-        return { x: cx + (dx / dist) * radius, y: cy + (dy / dist) * radius };
+      /* Cubic Bézier from (x1,y1) to (x2,y2) */
+      const bezier = (x1, y1, x2, y2) => {
+        const dx = x2 - x1, dy = y2 - y1;
+        return `M ${x1} ${y1} C ${x1 + dx * 0.65} ${y1 + dy * 0.1}, ${x1 + dx * 0.35} ${y1 + dy * 0.9}, ${x2} ${y2}`;
       };
 
-      /* Helper: build a cubic Bézier path string from node perimeter to hub perimeter */
-      const bezier = (nodeCx, nodeCy, hubCx, hubCy, nodeR, hubR) => {
-        const start = perimeterPoint(nodeCx, nodeCy, hubCx, hubCy, nodeR);
-        const end   = perimeterPoint(hubCx, hubCy, nodeCx, nodeCy, hubR);
-        const dx = end.x - start.x;
-        const dy = end.y - start.y;
-        const cp1x = start.x + dx * 0.65;
-        const cp1y = start.y + dy * 0.1;
-        const cp2x = start.x + dx * 0.35;
-        const cp2y = start.y + dy * 0.9;
-        return `M ${start.x} ${start.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${end.x} ${end.y}`;
+      const center = (el) => {
+        const r = el.getBoundingClientRect();
+        return [r.left + r.width / 2 - cr.left, r.top + r.height / 2 - cr.top];
       };
 
-      /* Sources → hub (lighter) */
       for (const [id, el] of Object.entries(sourceRefs.current)) {
-        const r = el.getBoundingClientRect();
-        const nx = r.left + r.width / 2 - cr.left;
-        const ny = r.top + r.height / 2 - cr.top;
-        result.push({ id, d: bezier(nx, ny, hx, hy, NODE_RADIUS, HUB_RADIUS), type: "source" });
+        const [nx, ny] = center(el);
+        result.push({ id, d: bezier(nx, ny, hx, hy), type: "source" });
       }
-
-      /* Domains → hub (normal) */
       for (const [id, el] of Object.entries(domainRefs.current)) {
-        const r = el.getBoundingClientRect();
-        const nx = r.left + r.width / 2 - cr.left;
-        const ny = r.top + r.height / 2 - cr.top;
-        result.push({ id, d: bezier(nx, ny, hx, hy, NODE_RADIUS, HUB_RADIUS), type: "domain" });
+        const [nx, ny] = center(el);
+        result.push({ id, d: bezier(nx, ny, hx, hy), type: "domain" });
       }
-
-      /* Hub → targets (lighter) */
       for (const [id, el] of Object.entries(targetRefs.current)) {
-        const r = el.getBoundingClientRect();
-        const nx = r.left + r.width / 2 - cr.left;
-        const ny = r.top + r.height / 2 - cr.top;
-        result.push({ id, d: bezier(hx, hy, nx, ny, HUB_RADIUS, NODE_RADIUS), type: "target" });
+        const [nx, ny] = center(el);
+        result.push({ id, d: bezier(hx, hy, nx, ny), type: "target" });
       }
 
       setCurves(result);
     };
-    /* Small delay to let new DOM nodes mount before measuring */
     const t = setTimeout(calc, 50);
     window.addEventListener("resize", calc);
     return () => { clearTimeout(t); window.removeEventListener("resize", calc); };
@@ -633,3 +603,5 @@ export default function AIIncidentControlTower() {
     </div>
   );
 }
+
+
