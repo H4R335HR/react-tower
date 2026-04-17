@@ -70,14 +70,18 @@ function App() {
 
 ### CDN / Standalone Usage
 
-The component can also run in a vanilla HTML page with React loaded via CDN:
+An `index.html` is included that loads React via CDN — no build tools needed:
 
-```html
-<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script type="text/babel" src="ai-incident-control-tower.jsx"></script>
+```bash
+# Serve locally (any static server works)
+npx serve .
+# or
+python3 -m http.server 8000
 ```
+
+Then open `http://localhost:8000` (or `5000` for `npx serve`).
+
+> **Note:** The HTML file must be served via HTTP (not `file://`) because it fetches the JSX file at runtime.
 
 ---
 
