@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Incident Control Tower</title>
+  <meta name="description" content="Interactive IT incident management topology visualization built with React" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+    #root { min-height: 100vh; }
+    /* Loading state */
+    #loader {
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; flex-direction: column; gap: 16px;
+      background: linear-gradient(180deg, #eaecf6 0%, #f0f1f8 40%, #edeef6 100%);
+      color: #5b5fa6; font-size: 16px; font-weight: 600;
+    }
+    #loader .spinner {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 3px solid rgba(91,95,166,0.15);
+      border-top-color: #5b5fa6;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+
+  <!-- React 18 via CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+</head>
+<body>
+  <div id="root">
+    <div id="loader">
+      <div class="spinner"></div>
+      Loading Control Tower…
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Fetches the JSX component, strips ES module syntax (import/export),
+     * injects React hook globals, transpiles via Babel, and renders.
+     */
+    fetch('ai-incident-control-tower.jsx')
+      .then(function (res) {
+        if (!res.ok) throw new Error('Failed to load component: ' + res.status);
+        return res.text();
+      })
+      .then(function (code) {
+        // Strip ES module import/export — CDN React uses globals
+        code = code.replace(/^import\s+\{[^}]*\}\s+from\s+["'][^"']+["'];?\s*$/gm, '');
+        code = code.replace(/^export\s+default\s+/gm, 'var AIIncidentControlTower = ');
+
+        // Prepend React hooks from global
+        var fullCode =
+          'var useState = React.useState;\n' +
+          'var useRef = React.useRef;\n' +
+          'var useEffect = React.useEffect;\n' +
+          'var useCallback = React.useCallback;\n\n' +
+          code;
+
+        // Transpile JSX → JS
+        var transformed = Babel.transform(fullCode, {
+          presets: ['react'],
+          filename: 'ai-incident-control-tower.jsx',
+        }).code;
+
+        // Execute
+        var script = document.createElement('script');
+        script.textContent = transformed;
+        document.body.appendChild(script);
+
+        // Render
+        var root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(React.createElement(AIIncidentControlTower));
+      })
+      .catch(function (err) {
+        document.getElementById('root').innerHTML =
+          '<div style="padding:40px;color:#d4556a;font-size:16px;">' +
+          '<strong>Error:</strong> ' + err.message +
+          '<br/><br/>Make sure <code>ai-incident-control-tower.jsx</code> is in the same directory as this HTML file.' +
+          '</div>';
+      });
+  </script>
+</body>
+</html>
