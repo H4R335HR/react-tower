@@ -187,7 +187,7 @@ const INIT_TARGETS = [
 ];
 
 /* ─── Node component ─── */
-function Node({ item, labelSide }) {
+function Node({ item, labelSide, circleRef }) {
   const imp = getImpact(item.count);
   const col = IMPACT[imp];
   return (
@@ -195,7 +195,7 @@ function Node({ item, labelSide }) {
       display: "flex", alignItems: "center", gap: 10,
       flexDirection: labelSide === "right" ? "row" : "row-reverse",
     }}>
-      <div style={{ position: "relative", width: 64, height: 64, flexShrink: 0 }}>
+      <div ref={circleRef} style={{ position: "relative", width: 64, height: 64, flexShrink: 0 }}>
         <div style={{
           width: 64, height: 64, borderRadius: "50%",
           border: `2.5px solid ${col.ring}`, background: col.bg,
@@ -238,14 +238,17 @@ function Column({ items, labelSide, style, onRef }) {
   );
 }
 
-/* ─── Node wrapper that captures a DOM ref ─── */
+/* ─── Node wrapper that captures a DOM ref on the circle element ─── */
 function RefNode({ item, labelSide, onMount }) {
-  const ref = useRef(null);
-  useEffect(() => { if (ref.current && onMount) onMount(item.id, ref.current); }, [item.id, onMount]);
-  return <div ref={ref}><Node item={item} labelSide={labelSide} /></div>;
+  const circleRef = useRef(null);
+  useEffect(() => { if (circleRef.current && onMount) onMount(item.id, circleRef.current); }, [item.id, onMount]);
+  return <div><Node item={item} labelSide={labelSide} circleRef={circleRef} /></div>;
 }
 
 /* ─── Connector curves (all three sections → hub) ─── */
+const NODE_RADIUS = 32;  /* half of the 64px node circle */
+const HUB_RADIUS  = 75;  /* half of the 150px hub circle */
+
 function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domains }) {
   const [curves, setCurves] = useState([]);
   useEffect(() => {
@@ -259,15 +262,30 @@ function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domai
       const hy = hr.top + hr.height / 2 - cr.top;
       const result = [];
 
-      /* Helper: build a cubic Bézier path string */
-      const bezier = (nx, ny, tx, ty) => {
-        const dx = tx - nx;
-        const dy = ty - ny;
-        const cp1x = nx + dx * 0.65;
-        const cp1y = ny + dy * 0.1;
-        const cp2x = nx + dx * 0.35;
-        const cp2y = ny + dy * 0.9;
-        return `M ${nx} ${ny} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${tx} ${ty}`;
+      /**
+       * Offset a point (cx, cy) along the direction towards (tx, ty)
+       * so the returned point sits on the perimeter of a circle of
+       * the given radius centred at (cx, cy).
+       */
+      const perimeterPoint = (cx, cy, tx, ty, radius) => {
+        const dx = tx - cx;
+        const dy = ty - cy;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist === 0) return { x: cx, y: cy };
+        return { x: cx + (dx / dist) * radius, y: cy + (dy / dist) * radius };
+      };
+
+      /* Helper: build a cubic Bézier path string from node perimeter to hub perimeter */
+      const bezier = (nodeCx, nodeCy, hubCx, hubCy, nodeR, hubR) => {
+        const start = perimeterPoint(nodeCx, nodeCy, hubCx, hubCy, nodeR);
+        const end   = perimeterPoint(hubCx, hubCy, nodeCx, nodeCy, hubR);
+        const dx = end.x - start.x;
+        const dy = end.y - start.y;
+        const cp1x = start.x + dx * 0.65;
+        const cp1y = start.y + dy * 0.1;
+        const cp2x = start.x + dx * 0.35;
+        const cp2y = start.y + dy * 0.9;
+        return `M ${start.x} ${start.y} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${end.x} ${end.y}`;
       };
 
       /* Sources → hub (lighter) */
@@ -275,7 +293,7 @@ function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domai
         const r = el.getBoundingClientRect();
         const nx = r.left + r.width / 2 - cr.left;
         const ny = r.top + r.height / 2 - cr.top;
-        result.push({ id, d: bezier(nx, ny, hx, hy), type: "source" });
+        result.push({ id, d: bezier(nx, ny, hx, hy, NODE_RADIUS, HUB_RADIUS), type: "source" });
       }
 
       /* Domains → hub (normal) */
@@ -283,7 +301,7 @@ function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domai
         const r = el.getBoundingClientRect();
         const nx = r.left + r.width / 2 - cr.left;
         const ny = r.top + r.height / 2 - cr.top;
-        result.push({ id, d: bezier(nx, ny, hx, hy), type: "domain" });
+        result.push({ id, d: bezier(nx, ny, hx, hy, NODE_RADIUS, HUB_RADIUS), type: "domain" });
       }
 
       /* Hub → targets (lighter) */
@@ -291,7 +309,7 @@ function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domai
         const r = el.getBoundingClientRect();
         const nx = r.left + r.width / 2 - cr.left;
         const ny = r.top + r.height / 2 - cr.top;
-        result.push({ id, d: bezier(hx, hy, nx, ny), type: "target" });
+        result.push({ id, d: bezier(hx, hy, nx, ny, HUB_RADIUS, NODE_RADIUS), type: "target" });
       }
 
       setCurves(result);
