@@ -358,49 +358,70 @@ function RefNode({ item, labelSide, onMount }) {
 }
 
 /* ─── Connector curves (all three sections → hub) ─── */
-function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domains, sources, targets }) {
+function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domains, sources, targets, hoveredId, drag }) {
   const [curves, setCurves] = useState([]);
-  useEffect(() => {
-    const calc = () => {
-      const c = containerRef.current;
-      const h = hubRef.current;
-      if (!c || !h) return;
-      const cr = c.getBoundingClientRect();
-      const hr = h.getBoundingClientRect();
-      const hx = hr.left + hr.width / 2 - cr.left;
-      const hy = hr.top + hr.height / 2 - cr.top;
-      const result = [];
 
-      /* Cubic Bézier from (x1,y1) to (x2,y2) */
-      const bezier = (x1, y1, x2, y2) => {
-        const dx = x2 - x1, dy = y2 - y1;
-        return `M ${x1} ${y1} C ${x1 + dx * 0.65} ${y1 + dy * 0.1}, ${x1 + dx * 0.35} ${y1 + dy * 0.9}, ${x2} ${y2}`;
-      };
+  const calc = useCallback(() => {
+    const c = containerRef.current;
+    const h = hubRef.current;
+    if (!c || !h) return;
+    const cr = c.getBoundingClientRect();
+    const hr = h.getBoundingClientRect();
+    const hx = hr.left + hr.width / 2 - cr.left;
+    const hy = hr.top + hr.height / 2 - cr.top;
+    const result = [];
 
-      const center = (el) => {
-        const r = el.getBoundingClientRect();
-        return [r.left + r.width / 2 - cr.left, r.top + r.height / 2 - cr.top];
-      };
-
-      for (const [id, el] of Object.entries(sourceRefs.current)) {
-        const [nx, ny] = center(el);
-        result.push({ id, d: bezier(nx, ny, hx, hy), type: "source" });
-      }
-      for (const [id, el] of Object.entries(domainRefs.current)) {
-        const [nx, ny] = center(el);
-        result.push({ id, d: bezier(nx, ny, hx, hy), type: "domain" });
-      }
-      for (const [id, el] of Object.entries(targetRefs.current)) {
-        const [nx, ny] = center(el);
-        result.push({ id, d: bezier(hx, hy, nx, ny), type: "target" });
-      }
-
-      setCurves(result);
+    const bezier = (x1, y1, x2, y2) => {
+      const dx = x2 - x1, dy = y2 - y1;
+      /* Browsers drop linear gradients if the SVG path bounding box has 0 height.
+         If the wire is perfectly horizontal, we add a microscopic 0.1px bump to the control points. */
+      const bump = Math.abs(dy) < 0.05 ? 0.1 : 0;
+      return `M ${x1} ${y1} C ${x1 + dx * 0.65} ${y1 + dy * 0.1 + bump}, ${x1 + dx * 0.35} ${y1 + dy * 0.9 - bump}, ${x2} ${y2}`;
     };
+
+    const center = (el) => {
+      const r = el.getBoundingClientRect();
+      return [r.left + r.width / 2 - cr.left, r.top + r.height / 2 - cr.top];
+    };
+
+    for (const [id, el] of Object.entries(sourceRefs.current)) {
+      const [nx, ny] = center(el);
+      result.push({ id, d: bezier(nx, ny, hx, hy), type: "source" });
+    }
+    for (const [id, el] of Object.entries(domainRefs.current)) {
+      const [nx, ny] = center(el);
+      result.push({ id, d: bezier(nx, ny, hx, hy), type: "domain" });
+    }
+    for (const [id, el] of Object.entries(targetRefs.current)) {
+      const [nx, ny] = center(el);
+      result.push({ id, d: bezier(hx, hy, nx, ny), type: "target" });
+    }
+
+    setCurves(result);
+  }, [sourceRefs, domainRefs, targetRefs, hubRef, containerRef]);
+
+  useEffect(() => {
     const t = setTimeout(calc, 50);
     window.addEventListener("resize", calc);
     return () => { clearTimeout(t); window.removeEventListener("resize", calc); };
-  }, [sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domains, sources, targets]);
+  }, [calc, domains, sources, targets]);
+
+  /* Recalculate curves on every frame during drag, and for 800ms after to follow snap-back CSS transition */
+  useEffect(() => {
+    let raf;
+    if (drag) {
+      const tick = () => { calc(); raf = requestAnimationFrame(tick); };
+      raf = requestAnimationFrame(tick);
+    } else {
+      let start = performance.now();
+      const tick = (now) => {
+        calc();
+        if (now - start < 800) raf = requestAnimationFrame(tick);
+      };
+      raf = requestAnimationFrame(tick);
+    }
+    return () => cancelAnimationFrame(raf);
+  }, [drag, calc]);
 
   const lineStyle = {
     source: { stroke: "url(#wireGrad)", strokeWidth: 1.2, strokeOpacity: 0.35 },
@@ -419,14 +440,22 @@ function Lines({ sourceRefs, domainRefs, targetRefs, hubRef, containerRef, domai
           <stop offset="0%" stopColor="#9ba3c8" />
           <stop offset="100%" stopColor="#bcc2dc" />
         </linearGradient>
+        <linearGradient id="wireGradHot" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#7b80c4" />
+          <stop offset="100%" stopColor="#9ba0d8" />
+        </linearGradient>
       </defs>
-      {curves.map(l => (
-        <path key={l.id} d={l.d}
-          stroke={lineStyle[l.type].stroke}
-          strokeWidth={lineStyle[l.type].strokeWidth}
-          strokeOpacity={lineStyle[l.type].strokeOpacity}
-          fill="none" strokeLinecap="round" />
-      ))}
+      {curves.map(l => {
+        const hot = hoveredId === l.id;
+        return (
+          <path key={l.id} d={l.d}
+            stroke={hot ? "url(#wireGradHot)" : lineStyle[l.type].stroke}
+            strokeWidth={hot ? 2.8 : lineStyle[l.type].strokeWidth}
+            strokeOpacity={hot ? 0.85 : lineStyle[l.type].strokeOpacity}
+            fill="none" strokeLinecap="round"
+            style={{ transition: "stroke-width 0.25s ease, stroke-opacity 0.25s ease" }} />
+        );
+      })}
     </svg>
   );
 }
@@ -472,6 +501,28 @@ export default function AIIncidentControlTower() {
   const domainRefs = useRef({});
   const targetRefs = useRef({});
   const [ready, setReady] = useState(false);
+  const [hoveredId, setHoveredId] = useState(null);
+  const [drag, setDrag] = useState(null);       /* { id, dx, dy } */
+  const dragRef = useRef(null);                  /* { id, startMX, startMY } */
+
+  /* Start drag on mousedown */
+  const onNodeDown = useCallback((id, e) => {
+    e.preventDefault();
+    dragRef.current = { id, startMX: e.clientX, startMY: e.clientY };
+    setDrag({ id, dx: 0, dy: 0 });
+    const onMove = (ev) => {
+      if (!dragRef.current) return;
+      setDrag({ id: dragRef.current.id, dx: ev.clientX - dragRef.current.startMX, dy: ev.clientY - dragRef.current.startMY });
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      setDrag(null);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, []);
 
   const registerSource = useCallback((id, el) => { sourceRefs.current[id] = el; }, []);
   const registerDomain = useCallback((id, el) => { domainRefs.current[id] = el; }, []);
@@ -505,28 +556,40 @@ export default function AIIncidentControlTower() {
   const maxNodes = Math.max(sources.length, leftDomains.length, rightDomains.length, targets.length);
   const LAYOUT_H = Math.max(maxNodes * 100 + 60, 680);
 
-  /* Vertical equidistant + parabolic bow. side: -1 = left, +1 = right */
-  const bowPositions = (n, baseX, side) =>
+  /* Vertical equidistant + parabolic bow. spread = vertical range factor */
+  const bowPositions = (n, baseX, side, spread) =>
     Array.from({ length: n }, (_, i) => {
       const t = n <= 1 ? 0.5 : i / (n - 1);
-      const y = (t - 0.5) * (LAYOUT_H - 120);
+      const y = (t - 0.5) * spread;
       const curve = BOW * (1 - Math.pow(2 * t - 1, 2));
       const x = side * (baseX + curve);
       return { x, y };
     });
 
-  const srcPos  = bowPositions(sources.length,      OUTER_X, -1);
-  const lDomPos = bowPositions(leftDomains.length,  INNER_X, -1);
-  const rDomPos = bowPositions(rightDomains.length, INNER_X,  1);
-  const tgtPos  = bowPositions(targets.length,      OUTER_X,  1);
+  const outerSpread = LAYOUT_H - 120;
+  const innerSpread = outerSpread * 0.65;  /* domains use tighter vertical range */
 
-  const absNode = (pos) => ({
-    position: "absolute",
-    left: `calc(50% + ${pos.x}px)`,
-    top: `calc(50% + ${pos.y}px)`,
-    transform: "translate(-50%, -50%)",
-    whiteSpace: "nowrap",
-  });
+  const srcPos  = bowPositions(sources.length,      OUTER_X, -1, outerSpread);
+  const lDomPos = bowPositions(leftDomains.length,  INNER_X, -1, innerSpread);
+  const rDomPos = bowPositions(rightDomains.length, INNER_X,  1, innerSpread);
+  const tgtPos  = bowPositions(targets.length,      OUTER_X,  1, outerSpread);
+
+  const absNode = (pos, itemId) => {
+    const isDragging = drag && drag.id === itemId;
+    return {
+      position: "absolute",
+      left: `calc(50% + ${pos.x}px)`,
+      top: `calc(50% + ${pos.y}px)`,
+      transform: isDragging
+        ? `translate(calc(-50% + ${drag.dx}px), calc(-50% + ${drag.dy}px))`
+        : "translate(-50%, -50%)",
+      whiteSpace: "nowrap",
+      transition: isDragging ? "none" : "transform 0.6s cubic-bezier(.34,1.56,.64,1)",
+      zIndex: isDragging ? 10 : undefined,
+      cursor: isDragging ? "grabbing" : "grab",
+      userSelect: "none",
+    };
+  };
 
   return (
     <div style={{
@@ -584,7 +647,8 @@ export default function AIIncidentControlTower() {
         {ready && (
           <Lines sourceRefs={sourceRefs} domainRefs={domainRefs} targetRefs={targetRefs}
             hubRef={hubRef} containerRef={containerRef}
-            domains={domains} sources={sources} targets={targets} />
+            domains={domains} sources={sources} targets={targets}
+            hoveredId={hoveredId} drag={drag} />
         )}
 
         {/* Hub — dead centre */}
@@ -592,30 +656,42 @@ export default function AIIncidentControlTower() {
           <Hub hubRef={hubRef} />
         </div>
 
-        {/* Sources — left arc */}
+        {/* Sources — left */}
         {sources.map((item, i) => (
-          <div key={item.id} style={absNode(srcPos[i])}>
+          <div key={item.id} style={absNode(srcPos[i], item.id)}
+            onMouseEnter={() => setHoveredId(item.id)}
+            onMouseLeave={() => setHoveredId(null)}
+            onMouseDown={(e) => onNodeDown(item.id, e)}>
             <RefNode item={item} labelSide="left" onMount={registerSource} />
           </div>
         ))}
 
-        {/* Left domains — inner left arc */}
+        {/* Left domains */}
         {leftDomains.map((item, i) => (
-          <div key={item.id} style={absNode(lDomPos[i])}>
+          <div key={item.id} style={absNode(lDomPos[i], item.id)}
+            onMouseEnter={() => setHoveredId(item.id)}
+            onMouseLeave={() => setHoveredId(null)}
+            onMouseDown={(e) => onNodeDown(item.id, e)}>
             <RefNode item={item} labelSide="left" onMount={registerDomain} />
           </div>
         ))}
 
-        {/* Right domains — inner right arc */}
+        {/* Right domains */}
         {rightDomains.map((item, i) => (
-          <div key={item.id} style={absNode(rDomPos[i])}>
+          <div key={item.id} style={absNode(rDomPos[i], item.id)}
+            onMouseEnter={() => setHoveredId(item.id)}
+            onMouseLeave={() => setHoveredId(null)}
+            onMouseDown={(e) => onNodeDown(item.id, e)}>
             <RefNode item={item} labelSide="right" onMount={registerDomain} />
           </div>
         ))}
 
-        {/* Targets — right arc */}
+        {/* Targets — right */}
         {targets.map((item, i) => (
-          <div key={item.id} style={absNode(tgtPos[i])}>
+          <div key={item.id} style={absNode(tgtPos[i], item.id)}
+            onMouseEnter={() => setHoveredId(item.id)}
+            onMouseLeave={() => setHoveredId(null)}
+            onMouseDown={(e) => onNodeDown(item.id, e)}>
             <RefNode item={item} labelSide="right" onMount={registerTarget} />
           </div>
         ))}
