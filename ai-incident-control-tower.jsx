@@ -295,16 +295,29 @@ const INIT_TARGETS = [
 function Node({ item, labelSide, circleRef }) {
   const imp = getImpact(item.count);
   const col = IMPACT[imp];
+  const [hovered, setHovered] = useState(false);
   return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 10,
-      flexDirection: labelSide === "right" ? "row" : "row-reverse",
-    }}>
-      <div ref={circleRef} style={{ position: "relative", width: 64, height: 64, flexShrink: 0, zIndex: 1 }}>
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        display: "flex", alignItems: "center", gap: 10,
+        flexDirection: labelSide === "right" ? "row" : "row-reverse",
+        cursor: "default",
+      }}
+    >
+      <div ref={circleRef} style={{
+        position: "relative", width: 64, height: 64, flexShrink: 0, zIndex: 1,
+        transform: hovered ? "scale(1.1)" : "scale(1)",
+        transition: "transform 0.25s cubic-bezier(.4,0,.2,1), filter 0.25s ease",
+        filter: hovered ? `drop-shadow(0 2px 12px ${col.ring}44)` : "none",
+      }}>
         <div style={{
           width: 64, height: 64, borderRadius: "50%",
           border: `2.5px solid ${col.ring}`, background: col.bg,
           display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: hovered ? `0 0 0 4px ${col.ring}18` : "none",
+          transition: "box-shadow 0.25s ease",
         }}>
           <div style={{ width: 32, height: 32 }}>{ICONS[item.icon] || ICONS.globe}</div>
         </div>
@@ -313,11 +326,16 @@ function Node({ item, labelSide, circleRef }) {
           background: col.badge, color: "#fff", fontSize: 11, fontWeight: 700,
           fontFamily: "'Segoe UI', system-ui, sans-serif",
           borderRadius: 10, padding: "1px 8px", minWidth: 26, textAlign: "center",
+          boxShadow: hovered ? `0 2px 8px ${col.badge}55` : "none",
+          transition: "box-shadow 0.25s ease",
         }}>
           {String(item.count).padStart(2, "0")}
         </div>
       </div>
-      <div style={{ textAlign: labelSide === "right" ? "left" : "right", minWidth: 90, maxWidth: 130 }}>
+      <div style={{
+        textAlign: labelSide === "right" ? "left" : "right", minWidth: 90, maxWidth: 130,
+        opacity: hovered ? 1 : 0.85, transition: "opacity 0.2s ease",
+      }}>
         {item.label.split("\n").map((line, i) => (
           <div key={i} style={{
             fontSize: 12.5, fontWeight: 600, color: "#3d3f5c",
@@ -420,15 +438,17 @@ function Hub({ hubRef }) {
   return (
     <div ref={hubRef} style={{
       width: 150, height: 150, borderRadius: "50%", flexShrink: 0,
-      background: "radial-gradient(circle at 45% 40%, rgba(200,210,240,0.6) 0%, rgba(210,215,240,0.3) 50%, rgba(225,228,245,0.1) 100%)",
-      border: "1.5px solid rgba(170,180,220,0.4)",
+      background: "radial-gradient(circle at 45% 40%, rgba(210,215,245,0.7) 0%, rgba(220,225,248,0.4) 40%, rgba(235,238,250,0.15) 100%)",
+      border: "1.5px solid rgba(170,180,220,0.35)",
       display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column",
-      boxShadow: "0 4px 40px rgba(150,160,210,0.2)",
+      boxShadow: "0 0 60px rgba(130,140,210,0.15), 0 0 120px rgba(160,170,230,0.08), 0 4px 20px rgba(150,160,210,0.12)",
       zIndex: 2,
+      transition: "box-shadow 0.4s ease",
     }}>
       <div style={{
         fontFamily: "'Segoe UI', system-ui, sans-serif", fontSize: 14, fontWeight: 700,
         color: "#5b5fa6", textAlign: "center", lineHeight: 1.3,
+        letterSpacing: "0.02em",
       }}>AI IT Ops<br/>Tower</div>
     </div>
   );
@@ -475,7 +495,12 @@ export default function AIIncidentControlTower() {
   return (
     <div style={{
       minHeight: "100vh",
-      background: "linear-gradient(180deg, #e8eaf4 0%, #edeef6 100%)",
+      background: `
+        radial-gradient(ellipse 80% 60% at 20% 30%, rgba(200,190,240,0.15) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 70%, rgba(180,200,240,0.12) 0%, transparent 55%),
+        radial-gradient(ellipse 40% 40% at 50% 10%, rgba(220,200,250,0.1) 0%, transparent 50%),
+        linear-gradient(180deg, #eaecf6 0%, #f0f1f8 40%, #edeef6 100%)
+      `,
       fontFamily: "'Segoe UI', system-ui, sans-serif",
       padding: "28px 24px",
     }}>
