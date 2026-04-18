@@ -130,21 +130,21 @@ The modal respects viewport width too (`width: min(380px, calc(100vw - 48px))`).
 
 ## 🛠️ Customization
 
-### Adding Default Nodes
+### Adding & Managing Nodes (No Code Required)
 
-Edit the `INIT_SOURCES`, `INIT_DOMAINS`, or `INIT_TARGETS` arrays:
+Every section has a **`+` button** at the bottom of its column (desktop) or header row (mobile). Clicking it opens a modal where you can:
 
-```jsx
-const INIT_SOURCES = [
-  { id: "s1", label: "Passenger\nDigital Apps", count: 12, icon: "smartphone" },
-  { id: "s2", label: "Flight\nOperations",      count: 24, icon: "pilot" },
-  // ... add more
-];
-```
+- Enter a **label** (supports two lines using a line break)
+- Set an **incident count** (determines the impact colour automatically)
+- Pick an **icon** from the built-in icon palette
+
+The new node appears immediately and wires connect to the hub in real-time.
+
+> **Developer tip — changing the pre-loaded defaults:** Edit the `INIT_SOURCES`, `INIT_DOMAINS`, or `INIT_TARGETS` arrays at the top of the component file to change what nodes are shown on first load.
 
 ### Available Icons
 
-The component ships with 18 built-in SVG icons:
+The component ships with 18 built-in SVG icons selectable from the modal:
 
 `smartphone` · `pilot` · `baggage` · `airfield` · `globe` · `ramp` · `ground` · `security` · `terminal` · `boarding` · `immigration` · `baggageOps` · `departures` · `robot` · `monitor` · `vendor` · `engineer` · `tower`
 
