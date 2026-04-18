@@ -183,4 +183,5 @@ Bézier curves connect each node to the central hub using center-to-center endpo
 
 ## 📄 License
 
-MIT — use freely in personal and commercial projects.
+
+[MIT](./LICENSE) — use freely in personal and commercial projects.
