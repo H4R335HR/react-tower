@@ -175,7 +175,8 @@ function NodeModal({ open, section, onClose, onSave }) {
     display: "flex", alignItems: "center", justifyContent: "center",
   };
   const card = {
-    background: "#fff", borderRadius: 18, padding: "32px 36px", width: 380,
+    background: "#fff", borderRadius: 18, padding: "32px 36px",
+    width: "min(380px, calc(100vw - 48px))",
     boxShadow: "0 20px 60px rgba(60,50,120,0.25)", fontFamily: "'Segoe UI', system-ui, sans-serif",
   };
   const inputStyle = {
@@ -336,7 +337,7 @@ function Node({ item, labelSide, circleRef }) {
         </div>
       </div>
       <div style={{
-        textAlign: labelSide === "right" ? "left" : "right", minWidth: 90, maxWidth: 130,
+        textAlign: labelSide === "right" ? "left" : "right", minWidth: 70, maxWidth: 110,
         opacity: hovered ? 1 : 0.85, transition: "opacity 0.2s ease",
       }}>
         {item.label.split("\n").map((line, i) => (
@@ -494,6 +495,15 @@ export default function AIIncidentControlTower() {
   const [domains, setDomains] = useState(INIT_DOMAINS);
   const [targets, setTargets] = useState(INIT_TARGETS);
   const [modal, setModal] = useState({ open: false, section: "sources" });
+  const [vw, setVw] = useState(typeof window !== "undefined" ? window.innerWidth : 1200);
+
+  useEffect(() => {
+    const onResize = () => setVw(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  const isMobile = vw < 700;
 
   const containerRef = useRef(null);
   const hubRef = useRef(null);
@@ -502,10 +512,9 @@ export default function AIIncidentControlTower() {
   const targetRefs = useRef({});
   const [ready, setReady] = useState(false);
   const [hoveredId, setHoveredId] = useState(null);
-  const [drag, setDrag] = useState(null);       /* { id, dx, dy } */
-  const dragRef = useRef(null);                  /* { id, startMX, startMY } */
+  const [drag, setDrag] = useState(null);
+  const dragRef = useRef(null);
 
-  /* Start drag on mousedown */
   const onNodeDown = useCallback((id, e) => {
     e.preventDefault();
     dragRef.current = { id, startMX: e.clientX, startMY: e.clientY };
@@ -543,12 +552,11 @@ export default function AIIncidentControlTower() {
     setModal({ open: false, section: sec });
   };
 
-
-  /* ── Vertical-with-bow positioning for all groups ── */
-  const SPREAD_H  = 520;
-  const OUTER_X   = 400;   /* sources & targets distance from hub */
-  const INNER_X   = 180;   /* domains distance from hub */
-  const BOW       = 70;    /* parabolic horizontal bow */
+  /* ── Scale hub positions to viewport ── */
+  const scale   = Math.min(1, (vw - 32) / 1200);
+  const OUTER_X = Math.round(400 * scale);
+  const INNER_X = Math.round(180 * scale);
+  const BOW     = Math.round(70  * scale);
 
   const leftDomains  = domains.slice(0, Math.ceil(domains.length / 2));
   const rightDomains = domains.slice(Math.ceil(domains.length / 2));
@@ -556,7 +564,6 @@ export default function AIIncidentControlTower() {
   const maxNodes = Math.max(sources.length, leftDomains.length, rightDomains.length, targets.length);
   const LAYOUT_H = Math.max(maxNodes * 100 + 60, 680);
 
-  /* Vertical equidistant + parabolic bow. spread = vertical range factor */
   const bowPositions = (n, baseX, side, spread) =>
     Array.from({ length: n }, (_, i) => {
       const t = n <= 1 ? 0.5 : i / (n - 1);
@@ -567,7 +574,7 @@ export default function AIIncidentControlTower() {
     });
 
   const outerSpread = LAYOUT_H - 120;
-  const innerSpread = outerSpread * 0.65;  /* domains use tighter vertical range */
+  const innerSpread = outerSpread * 0.65;
 
   const srcPos  = bowPositions(sources.length,      OUTER_X, -1, outerSpread);
   const lDomPos = bowPositions(leftDomains.length,  INNER_X, -1, innerSpread);
@@ -590,6 +597,56 @@ export default function AIIncidentControlTower() {
       userSelect: "none",
     };
   };
+
+  /* ── Mobile stacked list view ── */
+  if (isMobile) {
+    const Section = ({ title, items, section }) => (
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#4a4c78", letterSpacing: "0.08em", textTransform: "uppercase", borderBottom: "2px solid rgba(91,95,166,0.2)", paddingBottom: 3 }}>{title}</span>
+          <div onClick={() => setModal({ open: true, section })} style={{ width: 32, height: 32, borderRadius: "50%", border: "2px dashed #a8b0cc", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#7b8bb5", fontSize: 20, flexShrink: 0 }}>+</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {items.map(item => {
+            const imp = getImpact(item.count);
+            const col = IMPACT[imp];
+            return (
+              <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, background: "rgba(255,255,255,0.6)", borderRadius: 12, padding: "10px 14px", border: `1.5px solid ${col.ring}30`, backdropFilter: "blur(8px)" }}>
+                <div style={{ width: 44, height: 44, borderRadius: "50%", border: `2px solid ${col.ring}`, background: col.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div style={{ width: 24, height: 24 }}>{ICONS[item.icon] || ICONS.globe}</div>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {item.label.split("\n").map((line, i) => <div key={i} style={{ fontSize: 13, fontWeight: 600, color: "#3d3f5c", lineHeight: 1.3 }}>{line}</div>)}
+                </div>
+                <div style={{ background: `linear-gradient(135deg, ${col.badge}, ${col.badge}dd)`, color: "#fff", fontSize: 12, fontWeight: 700, borderRadius: 10, padding: "2px 10px", flexShrink: 0 }}>{String(item.count).padStart(2, "0")}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(180deg, #eaecf6 0%, #f0f1f8 40%, #edeef6 100%)", fontFamily: "'Segoe UI', system-ui, sans-serif", padding: "20px 16px" }}>
+        <NodeModal open={modal.open} section={modal.section} onClose={() => setModal(m => ({ ...m, open: false }))} onSave={handleAddNode} />
+        <h1 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 8px", letterSpacing: "0.02em", background: "linear-gradient(135deg, #3b2d7a 0%, #5b5fa6 50%, #7b6fc0 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>AI Incident Control Tower</h1>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", margin: "16px auto 24px", width: 100, height: 100, borderRadius: "50%", background: "radial-gradient(circle at 40% 35%, #cdd2f2 0%, #d8dcf6 35%, #e4e7fa 70%, #eceef9 100%)", border: "1.5px solid rgba(170,180,220,0.3)", boxShadow: "0 0 0 8px rgba(180,185,230,0.12), 0 0 40px rgba(130,140,210,0.18)", flexDirection: "column" }}>
+          <div style={{ fontFamily: "'Segoe UI', system-ui, sans-serif", fontSize: 11, fontWeight: 800, background: "linear-gradient(135deg, #4a4e94, #6b6fc0)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", textAlign: "center", lineHeight: 1.3 }}>AI IT Ops<br/>Tower</div>
+        </div>
+        <Section title="Incident Sources" items={sources} section="sources" />
+        <Section title="Incident Domains" items={domains} section="domains" />
+        <Section title="Escalation Targets" items={targets} section="targets" />
+        <div style={{ display: "flex", gap: 16, padding: "14px 16px", flexWrap: "wrap", background: "rgba(255,255,255,0.45)", backdropFilter: "blur(12px)", borderRadius: 14, border: "1px solid rgba(180,185,220,0.2)", justifyContent: "center" }}>
+          {[{ label: "High Impact: >10", color: "#d4556a" }, { label: "Medium: 5–10", color: "#e8a84c" }, { label: "Low Impact: <5", color: "#94a3c4" }].map(l => (
+            <div key={l.label} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 600, color: "#4a4c6a" }}>
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: `radial-gradient(circle, ${l.color}40 30%, transparent 70%)`, border: `2px solid ${l.color}` }} />
+              {l.label}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{
